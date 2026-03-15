@@ -1,0 +1,68 @@
+import { Router } from 'express';
+import authMiddleware from '../middleware/authMiddleware.js';
+import syncCooldownMiddleware from '../middleware/rateLimitMiddleware.js';
+import { enqueueSingleSync } from '../queues/syncQueue.js';
+import GithubStats from '../models/GithubStats.js';
+
+const router = Router();
+
+// ─── POST /api/sync — Enqueue a sync job (rate-limited) ───
+router.post('/', authMiddleware, syncCooldownMiddleware, async (req, res) => {
+  try {
+    const student = req.user;
+
+    if (!student.githubConnected) {
+      return res
+        .status(400)
+        .json({ error: 'Connect your GitHub account first' });
+    }
+
+    const job = await enqueueSingleSync(student._id);
+
+    const cooldownMs =
+      (parseInt(process.env.SYNC_COOLDOWN_MINUTES) || 30) * 60 * 1000;
+    const nextAllowedAt = new Date(Date.now() + cooldownMs);
+
+    return res.json({
+      message: 'Sync job queued',
+      jobId: job.id,
+      status: 'queued',
+      nextAllowedAt,
+    });
+  } catch (error) {
+    console.error('Sync enqueue error:', error.message);
+    return res.status(500).json({ error: 'Failed to queue sync job' });
+  }
+});
+
+// ─── GET /api/sync/status — Latest sync result ───
+router.get('/status', authMiddleware, async (req, res) => {
+  try {
+    const student = req.user;
+    const stats = await GithubStats.findOne({ userId: student._id });
+
+    const cooldownMs =
+      (parseInt(process.env.SYNC_COOLDOWN_MINUTES) || 30) * 60 * 1000;
+    const canSync =
+      !student.lastSyncedAt ||
+      Date.now() - new Date(student.lastSyncedAt).getTime() >= cooldownMs;
+    const nextAllowedAt = student.lastSyncedAt
+      ? new Date(new Date(student.lastSyncedAt).getTime() + cooldownMs)
+      : null;
+
+    return res.json({
+      lastSyncedAt: student.lastSyncedAt,
+      canSync,
+      nextAllowedAt,
+      hasStats: !!stats,
+      score: student.score,
+      tierRank: student.tierRank,
+      fromCache: stats?.fromCache || false,
+    });
+  } catch (error) {
+    console.error('Sync status error:', error.message);
+    return res.status(500).json({ error: 'Failed to get sync status' });
+  }
+});
+
+export default router;
