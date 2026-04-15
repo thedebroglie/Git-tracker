@@ -12,13 +12,20 @@ import authRoutes from './routes/authRoutes.js';
 import syncRoutes from './routes/syncRoutes.js';
 import leaderboardRoutes from './routes/leaderboardRoutes.js';
 import studentRoutes from './routes/studentRoutes.js';
+import webhookRoutes from './routes/webhookRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ─── Middleware ───
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000', credentials: true }));
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf.toString('utf8');
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Root health check ───
@@ -31,6 +38,7 @@ app.use('/auth', authRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/student', studentRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // ─── Health check ───
 app.get('/health', (req, res) => {
@@ -58,12 +66,22 @@ const startServer = async () => {
     // Connect to MongoDB (also sets up indexes)
     await connectDB();
 
-    // Verify Redis connectivity
-    const pong = await redis.ping();
-    console.log(`Redis ping: ${pong}`);
+    // Verify Redis connectivity; continue in degraded local mode if unavailable.
+    let redisReady = false;
+    try {
+      const pong = await redis.ping();
+      redisReady = pong === 'PONG';
+      console.log(`Redis ping: ${pong}`);
+    } catch (redisError) {
+      console.warn(`Redis unavailable, continuing in degraded mode: ${redisError.message}`);
+    }
 
-    // Register nightly BullMQ repeatable job (Gap 1 fix)
-    await enqueueNightlySync();
+    // Register nightly BullMQ repeatable job only when Redis is available.
+    if (redisReady) {
+      await enqueueNightlySync();
+    } else {
+      console.warn('Nightly sync scheduler skipped because Redis is unavailable.');
+    }
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

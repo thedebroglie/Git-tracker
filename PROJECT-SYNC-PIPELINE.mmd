@@ -1,0 +1,35 @@
+flowchart LR
+    U[Student User]
+    UI[Web UI]
+    SR[Sync Route API]
+    RL[Cooldown Middleware]
+    Q[BullMQ Queue]
+    W[Sync Worker]
+    GC[GitHub Service]
+    AC[Anti-Cheat Service]
+    SC[Score Engine]
+    RK[Rank Engine]
+    MDB[(MongoDB)]
+    RDS[(Redis Cache)]
+
+    U --> UI
+    UI -->|POST /api/sync| SR
+    SR --> RL
+    RL -->|allowed| Q
+    Q --> W
+
+    W -->|invalidate/read cache| RDS
+    W -->|fetch metadata| GC
+    GC --> RDS
+
+    W --> AC
+    AC --> SC
+    SC --> RK
+
+    RK -->|update rank| MDB
+    SC -->|update score and breakdown| MDB
+    AC -->|update flags| MDB
+
+    UI -->|GET /api/sync/status| SR
+    SR --> MDB
+    SR --> UI

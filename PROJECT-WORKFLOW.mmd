@@ -1,0 +1,42 @@
+flowchart LR
+    U[Student User]
+    UI[Web UI]
+    A[Auth API]
+    GH[GitHub OAuth + GraphQL]
+    RS[(Redis)]
+    Q[BullMQ Queue]
+    W[Sync Worker]
+    N[Normalizer]
+    AC[Anti-Cheat Engine]
+    SE[Scoring Engine]
+    RE[Rank and Tier Engine]
+    DB[(MongoDB)]
+    API[Leaderboard and Profile APIs]
+
+    U --> UI
+    UI --> A
+    A --> DB
+
+    UI -->|Connect GitHub| GH
+    GH -->|OAuth callback| A
+    A -->|Store state and cache| RS
+
+    UI -->|Request sync| API
+    API -->|Cooldown check| DB
+    API -->|Enqueue job| Q
+    Q --> W
+
+    W -->|Invalidate and read cache| RS
+    W -->|Fetch metadata| GH
+    W --> N
+    N --> AC
+    AC --> SE
+    SE --> RE
+
+    RE -->|Update score/rank/tier| DB
+    SE -->|Score breakdown| DB
+    AC -->|Flags| DB
+
+    UI -->|Read leaderboard and profile| API
+    API --> DB
+    API --> UI

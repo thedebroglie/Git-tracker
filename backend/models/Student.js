@@ -40,6 +40,17 @@ const studentSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    githubAppInstalled: {
+      type: Boolean,
+      default: false,
+    },
+    githubAppInstallationId: {
+      type: String,
+      index: true,
+      sparse: true,
+      unique: true,
+    },
+    githubAppSetupAction: String,
     githubAccessToken: {
       type: String,
       select: false,

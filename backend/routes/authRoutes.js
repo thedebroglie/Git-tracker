@@ -6,6 +6,7 @@ import axios from 'axios';
 import Student from '../models/Student.js';
 import { redis } from '../config/redis.js';
 import authMiddleware from '../middleware/authMiddleware.js';
+import { setWithTTL, getValue, deleteKey } from '../utils/ephemeralStore.js';
 
 const { sign, verify } = jsonwebtoken;
 const router = Router();
@@ -142,7 +143,7 @@ router.get('/github', authMiddleware, async (req, res) => {
     const state = crypto.randomBytes(32).toString('hex');
 
     // Store state in Redis with 10-minute TTL (Gap 2 fix)
-    await redis.setex(`oauth:state:${state}`, 600, req.user._id.toString());
+    await setWithTTL(`oauth:state:${state}`, req.user._id.toString(), 600);
 
     const params = new URLSearchParams({
       client_id: process.env.GITHUB_CLIENT_ID,
@@ -160,6 +161,67 @@ router.get('/github', authMiddleware, async (req, res) => {
   }
 });
 
+// ─── GET /auth/github/app/install — Generate GitHub App install URL ───
+router.get('/github/app/install', authMiddleware, async (req, res) => {
+  try {
+    if (!process.env.GITHUB_APP_INSTALL_URL) {
+      return res.status(500).json({
+        error: 'GITHUB_APP_INSTALL_URL is not configured',
+      });
+    }
+
+    const state = crypto.randomBytes(32).toString('hex');
+    await setWithTTL(`app:install:state:${state}`, req.user._id.toString(), 600);
+
+    const installUrl = new URL(process.env.GITHUB_APP_INSTALL_URL);
+    installUrl.searchParams.set('state', state);
+
+    return res.json({
+      installUrl: installUrl.toString(),
+    });
+  } catch (error) {
+    console.error('GitHub App install URL error:', error.message);
+    return res.status(500).json({ error: 'Failed to generate GitHub App install URL' });
+  }
+});
+
+// ─── GET /auth/github/app/callback — GitHub App install callback ───
+router.get('/github/app/callback', async (req, res) => {
+  try {
+    const { installation_id: installationId, setup_action: setupAction, state } = req.query;
+
+    if (!installationId || !state) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/github-connect?error=missing_installation_params`
+      );
+    }
+
+    const storedUserId = await getValue(`app:install:state:${state}`);
+    if (!storedUserId) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/github-connect?error=invalid_installation_state`
+      );
+    }
+
+    await deleteKey(`app:install:state:${state}`);
+
+    await Student.findByIdAndUpdate(storedUserId, {
+      githubAppInstalled: true,
+      githubAppInstallationId: installationId.toString(),
+      githubAppSetupAction: setupAction ? setupAction.toString() : 'install',
+    });
+
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/dashboard?github_app=installed`
+    );
+  } catch (error) {
+    console.error('GitHub App callback error:', error.message);
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/github-connect?error=app_callback_failed`
+    );
+  }
+});
+
 // ─── GET /auth/github/callback — OAuth callback ───
 router.get('/github/callback', async (req, res) => {
   try {
@@ -172,7 +234,7 @@ router.get('/github/callback', async (req, res) => {
     }
 
     // Verify state exists in Redis (CSRF check — Gap 2)
-    const storedUserId = await redis.get(`oauth:state:${state}`);
+    const storedUserId = await getValue(`oauth:state:${state}`);
     if (!storedUserId) {
       return res.redirect(
         `${process.env.FRONTEND_URL}/github-connect?error=invalid_state`
@@ -180,7 +242,7 @@ router.get('/github/callback', async (req, res) => {
     }
 
     // Delete the state token — one-time use
-    await redis.del(`oauth:state:${state}`);
+    await deleteKey(`oauth:state:${state}`);
 
     // Exchange code for access_token
     const tokenResponse = await axios.post(
