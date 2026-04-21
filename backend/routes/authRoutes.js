@@ -220,11 +220,29 @@ router.get('/google/callback', async (req, res) => {
       );
     }
 
-    const student = await Student.findOne({ email: googleEmail });
-    if (!student) {
+    if (!googleEmail.endsWith('@mitsgwl.ac.in') && !googleEmail.endsWith('@mitsgwalior.in')) {
       return res.redirect(
-        `${process.env.FRONTEND_URL}/login/google/callback?error=student_not_found&email=${encodeURIComponent(googleEmail)}`
+        `${process.env.FRONTEND_URL}/login/google/callback#error=invalid_domain&email=${encodeURIComponent(googleEmail)}`
       );
+    }
+
+    let student = await Student.findOne({ email: googleEmail });
+    if (!student) {
+      const emailPrefix = googleEmail.split('@')[0];
+      let branch = 'CSE';
+      if (emailPrefix.includes('it')) branch = 'IT';
+      else if (emailPrefix.includes('ec')) branch = 'ECE';
+      else if (emailPrefix.includes('me')) branch = 'ME';
+      else if (emailPrefix.includes('cv')) branch = 'CV';
+
+      student = new Student({
+        email: googleEmail,
+        name: googleUser.name || emailPrefix,
+        enrollmentId: emailPrefix.toUpperCase(),
+        branch: branch,
+        year: 1
+      });
+      await student.save();
     }
 
     const token = sign(
