@@ -1,5 +1,7 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import { fileURLToPath } from 'url';
+
+dotenv.config({ path: fileURLToPath(new URL('./.env', import.meta.url)) });
 
 import express from 'express';
 import cors from 'cors';
@@ -29,7 +31,22 @@ const serverState = {
 app.disable('x-powered-by');
 
 // ─── Middleware ───
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000', credentials: true }));
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:4173',
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
 app.use(securityHeadersMiddleware);
 app.use(requestContextMiddleware);
 app.use(requestLoggingMiddleware);
@@ -176,16 +193,10 @@ const startServer = async () => {
       serverState.redisReady = redisReady;
       console.log(`Redis ping: ${pong}`);
     } catch (redisError) {
-      serverState.redisReady = false;
-      console.warn(`Redis unavailable, continuing in degraded mode: ${redisError.message}`);
+      throw new Error(`Redis unavailable: ${redisError.message}`);
     }
 
-    // Register nightly BullMQ repeatable job only when Redis is available.
-    if (redisReady) {
-      await enqueueNightlySync();
-    } else {
-      console.warn('Nightly sync scheduler skipped because Redis is unavailable.');
-    }
+    await enqueueNightlySync();
 
     serverState.startupComplete = true;
 

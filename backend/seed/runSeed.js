@@ -1,5 +1,7 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import { fileURLToPath } from 'url';
+
+dotenv.config({ path: fileURLToPath(new URL('../.env', import.meta.url)) });
 
 import mongoose from 'mongoose';
 import students from './students.js';

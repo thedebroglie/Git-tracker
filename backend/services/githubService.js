@@ -72,9 +72,14 @@ const GITHUB_QUERY = `
 // -------------------------------------------------------------------
 // Call GitHub GraphQL API with pagination for repositories.
 // -------------------------------------------------------------------
-async function fetchGithubGraphQL(username) {
+async function fetchGithubGraphQL(username, userAccessToken = null) {
+  const appToken = process.env.GITHUB_APP_TOKEN;
+  const token = (appToken && appToken !== 'local_placeholder') ? appToken : userAccessToken;
+  
+  if (!token) throw new Error('No GitHub token available to fetch stats');
+
   const headers = {
-    Authorization: `Bearer ${process.env.GITHUB_APP_TOKEN}`,
+    Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   };
 
@@ -272,7 +277,7 @@ function extractStats(user, allRepoNodes, username) {
 // -------------------------------------------------------------------
 // Public API — fetch stats with Redis caching.
 // -------------------------------------------------------------------
-async function fetchGithubStats(username) {
+async function fetchGithubStats(username, userAccessToken = null) {
   const cacheKey = `github:stats:${username}`;
 
   // Check Redis cache first (RULE 7: never skip cache check)
@@ -289,7 +294,7 @@ async function fetchGithubStats(username) {
 
   console.log(`Cache MISS for ${username} — calling GitHub GraphQL`);
 
-  const { user, allRepoNodes } = await fetchGithubGraphQL(username);
+  const { user, allRepoNodes } = await fetchGithubGraphQL(username, userAccessToken);
   const stats = extractStats(user, allRepoNodes, username);
 
   // Store in Redis with TTL

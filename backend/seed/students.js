@@ -104,6 +104,13 @@ const students = [
     branch: 'ME',
     year: 4,
   },
+  {
+    enrollmentId: '24CS10PA89',
+    email: '24cs10pa89@mitsgwl.ac.in',
+    name: 'Parth Student',
+    branch: 'CSE',
+    year: 2,
+  },
 ];
 
 export default students;

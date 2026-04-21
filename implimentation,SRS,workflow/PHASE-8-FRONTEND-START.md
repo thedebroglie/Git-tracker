@@ -48,3 +48,12 @@ Phase 8 kickoff targets started today:
 2. Add pagination and filter UX for leaderboard/cohorts.
 3. Add explainability drill-down interactions.
 4. Add sync trigger UX and feedback to complete end-to-end Phase 8 flows.
+
+## Work Completed In This Pass (2026-04-17)
+
+- Added documented `VITE_API_BASE_URL` support in frontend API client.
+- Verified production frontend build after API base URL wiring.
+
+## Files Updated In This Pass
+
+1. frontend/src/services/api.js

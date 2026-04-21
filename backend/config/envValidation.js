@@ -42,6 +42,13 @@ function sanitizeConnection(value) {
   }
 }
 
+function maskClientId(value) {
+  if (isBlank(value)) return '<missing>';
+  const str = String(value);
+  if (str.length <= 8) return `${str.slice(0, 2)}***`;
+  return `${str.slice(0, 4)}***${str.slice(-4)}`;
+}
+
 function parseDurationToSeconds(input) {
   if (isBlank(input)) return null;
 
@@ -109,6 +116,15 @@ function validateEnvironment() {
     (process.env.NODE_ENV || '').toLowerCase() === 'production' &&
     isBlank(process.env.ADMIN_API_KEY);
 
+  const githubAuthClientIdMissing =
+    isBlank(process.env.GITHUB_CLIENT_ID) && isBlank(process.env.GITHUB_APP_CLIENT_ID);
+  const githubAuthClientSecretMissing =
+    isBlank(process.env.GITHUB_CLIENT_SECRET) &&
+    isBlank(process.env.GITHUB_APP_CLIENT_SECRET);
+  const googleAuthClientIdMissing = isBlank(process.env.GOOGLE_CLIENT_ID);
+  const googleAuthClientSecretMissing = isBlank(process.env.GOOGLE_CLIENT_SECRET);
+  const googleAuthCallbackMissing = isBlank(process.env.GOOGLE_CALLBACK_URL);
+
   const errors = [];
   const warnings = [];
 
@@ -134,6 +150,18 @@ function validateEnvironment() {
 
   if (adminKeyMissingInProduction) {
     errors.push('ADMIN_API_KEY is required in production for protected admin routes.');
+  }
+
+  if (githubAuthClientIdMissing || githubAuthClientSecretMissing) {
+    warnings.push(
+      'GitHub auth connect flow may fail: set GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET or GITHUB_APP_CLIENT_ID/GITHUB_APP_CLIENT_SECRET.'
+    );
+  }
+
+  if (googleAuthClientIdMissing || googleAuthClientSecretMissing || googleAuthCallbackMissing) {
+    warnings.push(
+      'Google sign-in may fail: set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL.'
+    );
   }
 
   if (placeholders.length > 0) {
@@ -172,6 +200,10 @@ function getSanitizedStartupConfig() {
       callbackUrl: process.env.GITHUB_APP_CALLBACK_URL || '<missing>',
       webhookSecretMasked: maskSecret(process.env.GITHUB_APP_WEBHOOK_SECRET),
       deliveryTTL: process.env.GITHUB_WEBHOOK_DELIVERY_TTL_SECONDS || '86400',
+    },
+    googleAuth: {
+      clientIdMasked: maskClientId(process.env.GOOGLE_CLIENT_ID),
+      callbackUrl: process.env.GOOGLE_CALLBACK_URL || '<missing>',
     },
     jwtSecretMasked: maskSecret(process.env.JWT_SECRET),
   };

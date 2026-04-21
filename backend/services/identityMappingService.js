@@ -153,12 +153,12 @@ async function disconnectGithubIdentity(studentId) {
   }
 
   student.githubConnected = false;
-  student.githubAccessToken = null;
+  student.githubAccessToken = undefined;
   student.githubDisconnectedAt = new Date();
-  student.avatar = null;
-  student.bio = null;
+  student.avatar = undefined;
+  student.bio = undefined;
   student.githubAppInstalled = false;
-  student.githubAppInstallationId = null;
+  student.githubAppInstallationId = undefined;
   student.githubTrackedRepositories = [];
   student.githubAppRepositorySelection = 'all';
   student.githubAppSetupAction = 'manual_disconnect';

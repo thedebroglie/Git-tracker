@@ -1,35 +1,70 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+import axios from 'axios';
 
-async function request(path, options = {}) {
-  const token = localStorage.getItem('gittracker_token');
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options.headers || {}),
-  };
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
 
+const api = axios.create({
+  baseURL: apiBaseUrl,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+// Auto-attach JWT token to every request
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('gt_token');
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    config.headers.Authorization = `Bearer ${token}`;
   }
+  return config;
+});
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
-
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(body.error || 'Request failed');
+// Auto-handle 401 responses (expired/invalid token)
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) {
+      localStorage.removeItem('gt_token');
+      localStorage.removeItem('gt_student');
+      // Only redirect if not already on auth page
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(err);
   }
+);
 
-  return body;
-}
+// ─── Auth ───
+export const authAPI = {
+  me: () => api.get('/auth/me'),
+  logout: () => api.post('/auth/logout'),
+  getGoogleUrl: () => api.get('/auth/google'),
+  getGithubUrl: () => api.get('/auth/github'),
+  getGithubAppInstallUrl: () => api.get('/auth/github/app/install'),
+};
 
-function saveToken(token) {
-  localStorage.setItem('gittracker_token', token);
-}
+// ─── Student ───
+export const studentAPI = {
+  getProfile: () => api.get('/api/student/profile'),
+  getScoreExplanation: () => api.get('/api/student/score-explanation'),
+  getSyncStatus: () => api.get('/api/student/sync-status'),
+  disconnectGithub: () => api.post('/api/student/github/disconnect'),
+  getPublicProfile: (enrollmentId) => api.get(`/api/student/${enrollmentId}`),
+  getPublicExplanation: (enrollmentId) => api.get(`/api/student/${enrollmentId}/score-explanation`),
+  deleteAccount: (password, confirmText) => api.delete('/api/student/account', { data: { password, confirmText } }),
+};
 
-function clearToken() {
-  localStorage.removeItem('gittracker_token');
-}
+// ─── Sync ───
+export const syncAPI = {
+  triggerSync: () => api.post('/api/sync'),
+  getStatus: () => api.get('/api/sync/status'),
+};
 
-export { request, saveToken, clearToken };
+// ─── Leaderboard ───
+export const leaderboardAPI = {
+  getLeaderboard: (params) => api.get('/api/leaderboard', { params }),
+  getMyPosition: () => api.get('/api/leaderboard/my-position'),
+  getMyTrends: (limit = 12) => api.get('/api/leaderboard/my-trends', { params: { limit } }),
+  getCohortsSummary: (params) => api.get('/api/leaderboard/cohorts/summary', { params }),
+  getPublicHistory: (enrollmentId, limit = 26) => api.get(`/api/leaderboard/${enrollmentId}/history`, { params: { limit } }),
+};
+
+export default api;

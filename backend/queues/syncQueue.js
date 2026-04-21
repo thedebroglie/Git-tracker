@@ -1,15 +1,27 @@
 import { Queue } from 'bullmq';
 import { redisConnection } from '../config/redis.js';
 
-const syncQueue = new Queue('github-sync', {
-  connection: redisConnection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 5000 },
-    removeOnComplete: 100,
-    removeOnFail: 200,
-  },
-});
+const isQueueDisabled =
+  (process.env.NODE_ENV || '').toLowerCase() === 'test' ||
+  process.env.DISABLE_QUEUE === 'true';
+
+const syncQueue = isQueueDisabled
+  ? {
+      add: async (name, data, options = {}) => ({
+        id: options.jobId || `test:${name}:${Date.now()}`,
+        name,
+        data,
+      }),
+    }
+  : new Queue('github-sync', {
+      connection: redisConnection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: 100,
+        removeOnFail: 200,
+      },
+    });
 
 /**
  * Add a single student sync job (triggered by manual refresh button).
@@ -30,6 +42,15 @@ async function enqueueSingleSync(studentId) {
  * Called once at server startup — BullMQ deduplicates by cron pattern.
  */
 async function enqueueNightlySync() {
+  if (isQueueDisabled) {
+    console.log('Nightly sync registration skipped in test/disabled queue mode.');
+    return {
+      id: 'nightly-sync-test',
+      name: 'sync-all-students',
+      data: {},
+    };
+  }
+
   await syncQueue.add(
     'sync-all-students',
     {},

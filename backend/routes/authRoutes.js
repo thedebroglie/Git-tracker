@@ -1,31 +1,15 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
 import jsonwebtoken from 'jsonwebtoken';
 import axios from 'axios';
 import Student from '../models/Student.js';
-import { redis } from '../config/redis.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import { setWithTTL, getValue, deleteKey } from '../utils/ephemeralStore.js';
 import { linkGithubIdentity } from '../services/identityMappingService.js';
 import { createRequestRateLimiter } from '../middleware/requestRateLimitMiddleware.js';
 
-const { sign, verify } = jsonwebtoken;
+const { sign } = jsonwebtoken;
 const router = Router();
-
-const authBurstLimiter = createRequestRateLimiter({
-  keyPrefix: 'rl:auth:burst',
-  windowSeconds: 60,
-  maxRequests: 30,
-  identity: 'ip',
-});
-
-const authCredentialLimiter = createRequestRateLimiter({
-  keyPrefix: 'rl:auth:credentials',
-  windowSeconds: 300,
-  maxRequests: 12,
-  identity: 'ip',
-});
 
 const oauthUrlLimiter = createRequestRateLimiter({
   keyPrefix: 'rl:auth:oauth_url',
@@ -34,134 +18,26 @@ const oauthUrlLimiter = createRequestRateLimiter({
   identity: 'user',
 });
 
-// ─── POST /auth/register ───
-router.post('/register', authBurstLimiter, authCredentialLimiter, async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    if (password.length < 6) {
-      return res
-        .status(400)
-        .json({ error: 'Password must be at least 6 characters' });
-    }
-
-    // Normalize email
-    const normalizedEmail = email.toLowerCase().trim();
-
-    // Check email in seed list (students collection)
-    const student = await Student.findOne({ email: normalizedEmail });
-    if (!student) {
-      return res
-        .status(401)
-        .json({ error: 'Email not found in institute records' });
-    }
-
-    // Check if already registered
-    const existingStudent = await Student.findOne({
-      email: normalizedEmail,
-    }).select('+passwordHash');
-    if (existingStudent && existingStudent.passwordHash) {
-      return res
-        .status(409)
-        .json({ error: 'Account already registered. Please log in.' });
-    }
-
-    // Hash password and save
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
-
-    student.passwordHash = passwordHash;
-    await student.save();
-
-    // Generate JWT
-    const token = sign(
-      { id: student._id, email: student.email, enrollmentId: student.enrollmentId },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
-
-    return res.status(201).json({
-      message: 'Registration successful',
-      token,
-      student: {
-        id: student._id,
-        name: student.name,
-        email: student.email,
-        enrollmentId: student.enrollmentId,
-        branch: student.branch,
-        year: student.year,
-        githubConnected: student.githubConnected,
-      },
-    });
-  } catch (error) {
-    console.error('Register error:', error.message);
-    return res.status(500).json({ error: 'Registration failed' });
-  }
-});
-
-// ─── POST /auth/login ───
-router.post('/login', authBurstLimiter, authCredentialLimiter, async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    const normalizedEmail = email.toLowerCase().trim();
-    const student = await Student.findOne({ email: normalizedEmail }).select(
-      '+passwordHash'
-    );
-
-    if (!student) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    if (!student.passwordHash) {
-      return res
-        .status(401)
-        .json({ error: 'Account not registered yet. Please register first.' });
-    }
-
-    const isMatch = await bcrypt.compare(password, student.passwordHash);
-    if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const token = sign(
-      { id: student._id, email: student.email, enrollmentId: student.enrollmentId },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
-
-    return res.json({
-      message: 'Login successful',
-      token,
-      student: {
-        id: student._id,
-        name: student.name,
-        email: student.email,
-        enrollmentId: student.enrollmentId,
-        branch: student.branch,
-        year: student.year,
-        githubConnected: student.githubConnected,
-        tierRank: student.tierRank,
-        score: student.score,
-      },
-    });
-  } catch (error) {
-    console.error('Login error:', error.message);
-    return res.status(500).json({ error: 'Login failed' });
-  }
+const googleOAuthLimiter = createRequestRateLimiter({
+  keyPrefix: 'rl:auth:google_oauth',
+  windowSeconds: 60,
+  maxRequests: 20,
+  identity: 'ip',
 });
 
 // ─── GET /auth/github — Generate OAuth URL with CSRF state ───
 router.get('/github', authMiddleware, oauthUrlLimiter, async (req, res) => {
   try {
+    const githubClientId = process.env.GITHUB_CLIENT_ID || process.env.GITHUB_APP_CLIENT_ID;
+    const githubCallbackUrl = process.env.GITHUB_CALLBACK_URL || process.env.GITHUB_APP_CALLBACK_URL;
+
+    if (!githubClientId || !githubCallbackUrl) {
+      return res.status(500).json({
+        error:
+          'GitHub auth is not configured. Set GITHUB_CLIENT_ID (or GITHUB_APP_CLIENT_ID) and GITHUB_CALLBACK_URL (or GITHUB_APP_CALLBACK_URL).',
+      });
+    }
+
     // Generate random state token for CSRF protection
     const state = crypto.randomBytes(32).toString('hex');
 
@@ -169,9 +45,9 @@ router.get('/github', authMiddleware, oauthUrlLimiter, async (req, res) => {
     await setWithTTL(`oauth:state:${state}`, req.user._id.toString(), 600);
 
     const params = new URLSearchParams({
-      client_id: process.env.GITHUB_CLIENT_ID,
+      client_id: githubClientId,
       scope: 'read:user',
-      redirect_uri: process.env.GITHUB_CALLBACK_URL,
+      redirect_uri: githubCallbackUrl,
       state,
     });
 
@@ -181,6 +57,41 @@ router.get('/github', authMiddleware, oauthUrlLimiter, async (req, res) => {
   } catch (error) {
     console.error('GitHub OAuth URL error:', error.message);
     return res.status(500).json({ error: 'Failed to generate GitHub auth URL' });
+  }
+});
+
+// ─── GET /auth/google — Generate Google OAuth URL with CSRF state ───
+router.get('/google', googleOAuthLimiter, async (req, res) => {
+  try {
+    const googleClientId = process.env.GOOGLE_CLIENT_ID;
+    const googleCallbackUrl = process.env.GOOGLE_CALLBACK_URL;
+
+    if (!googleClientId || !googleCallbackUrl) {
+      return res.status(500).json({
+        error:
+          'Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CALLBACK_URL.',
+      });
+    }
+
+    const state = crypto.randomBytes(32).toString('hex');
+    await setWithTTL(`google:state:${state}`, 'pending', 600);
+
+    const params = new URLSearchParams({
+      client_id: googleClientId,
+      redirect_uri: googleCallbackUrl,
+      response_type: 'code',
+      scope: 'openid email profile',
+      state,
+      prompt: 'select_account',
+      access_type: 'online',
+    });
+
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+    return res.json({ authUrl });
+  } catch (error) {
+    console.error('Google OAuth URL error:', error.message);
+    return res.status(500).json({ error: 'Failed to generate Google auth URL' });
   }
 });
 
@@ -245,9 +156,122 @@ router.get('/github/app/callback', async (req, res) => {
   }
 });
 
+// ─── GET /auth/google/callback — Google OAuth callback ───
+router.get('/google/callback', async (req, res) => {
+  try {
+    const googleClientId = process.env.GOOGLE_CLIENT_ID;
+    const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const googleCallbackUrl = process.env.GOOGLE_CALLBACK_URL;
+
+    if (!googleClientId || !googleClientSecret || !googleCallbackUrl) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/login/google/callback#error=google_oauth_not_configured`
+      );
+    }
+
+    const { code, state } = req.query;
+
+    if (!code || !state) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/login/google/callback#error=missing_params`
+      );
+    }
+
+    const storedState = await getValue(`google:state:${state}`);
+    if (!storedState) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/login/google/callback#error=invalid_state`
+      );
+    }
+
+    await deleteKey(`google:state:${state}`);
+
+    const tokenResponse = await axios.post(
+      'https://oauth2.googleapis.com/token',
+      new URLSearchParams({
+        code,
+        client_id: googleClientId,
+        client_secret: googleClientSecret,
+        redirect_uri: googleCallbackUrl,
+        grant_type: 'authorization_code',
+      }),
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }
+    );
+
+    const accessToken = tokenResponse.data?.access_token;
+    if (!accessToken) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/login/google/callback#error=token_exchange_failed`
+      );
+    }
+
+    const userResponse = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const googleUser = userResponse.data;
+    const googleEmail = String(googleUser.email || '').toLowerCase().trim();
+
+    if (!googleEmail) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/login/google/callback#error=missing_google_email`
+      );
+    }
+
+    const student = await Student.findOne({ email: googleEmail });
+    if (!student) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/login/google/callback?error=student_not_found&email=${encodeURIComponent(googleEmail)}`
+      );
+    }
+
+    const token = sign(
+      { id: student._id, email: student.email, enrollmentId: student.enrollmentId },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    const payload = encodeURIComponent(
+      JSON.stringify({
+        token,
+        student: {
+          id: student._id,
+          name: student.name,
+          email: student.email,
+          enrollmentId: student.enrollmentId,
+          branch: student.branch,
+          year: student.year,
+          githubConnected: student.githubConnected,
+          tierRank: student.tierRank,
+          score: student.score,
+        },
+      })
+    );
+
+    return res.redirect(`${process.env.FRONTEND_URL}/login/google/callback#payload=${payload}`);
+  } catch (error) {
+    console.error('Google callback error:', error.message);
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/login/google/callback#error=callback_failed`
+    );
+  }
+});
+
 // ─── GET /auth/github/callback — OAuth callback ───
 router.get('/github/callback', async (req, res) => {
   try {
+    const githubClientId = process.env.GITHUB_CLIENT_ID || process.env.GITHUB_APP_CLIENT_ID;
+    const githubClientSecret =
+      process.env.GITHUB_CLIENT_SECRET || process.env.GITHUB_APP_CLIENT_SECRET;
+
+    if (!githubClientId || !githubClientSecret) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/github-connect?error=oauth_not_configured`
+      );
+    }
+
     const { code, state } = req.query;
 
     if (!code || !state) {
@@ -271,8 +295,8 @@ router.get('/github/callback', async (req, res) => {
     const tokenResponse = await axios.post(
       'https://github.com/login/oauth/access_token',
       {
-        client_id: process.env.GITHUB_CLIENT_ID,
-        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        client_id: githubClientId,
+        client_secret: githubClientSecret,
         code,
       },
       {
