@@ -18,6 +18,15 @@ export default function LoginPage() {
     if (googleError) {
       const messages = {
         student_not_found: 'Google account email is not registered in GitTracker.',
+        invalid_domain: (
+          <div>
+            Only MITS Gwalior emails are allowed:
+            <ul style={{ margin: '8px 0 0 20px', padding: 0 }}>
+              <li>@mitsgwalior.in</li>
+              <li>@mitsgwl.ac.in</li>
+            </ul>
+          </div>
+        ),
         google_oauth_not_configured: 'Google login is not configured yet.',
         missing_params: 'Google login callback was missing required parameters.',
         invalid_state: 'Google login session expired. Please try again.',
@@ -65,7 +74,12 @@ export default function LoginPage() {
         {/* Auth Card */}
         <div className="auth-card glass glass--xl fade-in stagger-1">
           {/* Error */}
-          {error && <div className="auth-error">⚠ {error}</div>}
+          {error && (
+            <div className="auth-error" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', textAlign: 'left' }}>
+              <span>⚠</span>
+              <div>{error}</div>
+            </div>
+          )}
 
           {/* Google Sign-In Only */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

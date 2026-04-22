@@ -18,6 +18,18 @@ export default function ProfilePage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Edit Mode State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    enrollmentId: '',
+    branch: '',
+    semester: '',
+    mobile: ''
+  });
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+
   useEffect(() => {
     async function load() {
       try {
@@ -41,26 +53,47 @@ export default function ProfilePage() {
 
   if (loading) return <LoadingCards count={5} />;
 
+  const handleEditClick = () => {
+    setEditForm({
+      name: profile?.name || user?.name || '',
+      enrollmentId: profile?.enrollmentId || user?.enrollmentId || '',
+      branch: profile?.branch || user?.branch || 'CSE',
+      semester: profile?.semester || user?.semester || '',
+      mobile: profile?.mobile || user?.mobile || ''
+    });
+    setIsEditing(true);
+    setEditError('');
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditError('');
+  };
+
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    setEditError('');
+    try {
+      const res = await studentAPI.updateProfile(editForm);
+      setProfile(res.data.student);
+      setIsEditing(false);
+    } catch (err) {
+      setEditError(err.response?.data?.error || 'Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const ex = explanation;
   const p = profile || user;
   const s = stats;
 
-  if (!ex?.available) {
-    return (
-      <EmptyState
-        icon="📊"
-        title="No Score Data Yet"
-        text="Sync your GitHub profile first to see your detailed score breakdown and explainability."
-      />
-    );
-  }
-
-  const formula = ex.formula || {};
+  const formula = ex?.formula || {};
   const components = formula.components || {};
   const quality = formula.qualityBreakdown || {};
   const decay = formula.decay || {};
-  const caps = ex.capsApplied || {};
-  const antiCheat = ex.antiCheat || {};
+  const caps = ex?.capsApplied || {};
+  const antiCheat = ex?.antiCheat || {};
 
   return (
     <div className="fade-in">
@@ -69,40 +102,128 @@ export default function ProfilePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
           <Avatar src={p?.avatar} alt={p?.name} size="lg" tier={p?.tierRank} />
           <div style={{ flex: 1, minWidth: 200 }}>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, marginBottom: 4 }}>
-              {p?.name}
-            </h1>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                {p?.enrollmentId}
-              </span>
-              <span className="pill">{p?.branch}</span>
-              <span className="pill">Year {p?.year}</span>
-              {p?.githubUsername && (
-                <a
-                  href={`https://github.com/${p.githubUsername}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="pill pill--active"
-                  style={{ textDecoration: 'none' }}
-                >
-                  @{p.githubUsername} ↗
-                </a>
-              )}
-            </div>
+            {isEditing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {editError && <div className="alert alert--error">{editError}</div>}
+                <div>
+                  <label style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)' }}>Name</label>
+                  <input
+                    type="text"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    style={{ width: '100%', padding: '8px 12px', background: 'rgba(13,19,35,0.4)', border: '1px solid var(--glass-border)', borderRadius: 8, color: 'var(--on-surface)', outline: 'none' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <label style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)' }}>Enrollment ID</label>
+                    <input
+                      type="text"
+                      value={editForm.enrollmentId}
+                      onChange={(e) => setEditForm({ ...editForm, enrollmentId: e.target.value })}
+                      style={{ width: '100%', padding: '8px 12px', background: 'rgba(13,19,35,0.4)', border: '1px solid var(--glass-border)', borderRadius: 8, color: 'var(--on-surface)', outline: 'none' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <label style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)' }}>Branch</label>
+                    <select
+                      value={editForm.branch}
+                      onChange={(e) => setEditForm({ ...editForm, branch: e.target.value })}
+                      style={{ width: '100%', padding: '8px 12px', background: 'rgba(13,19,35,0.4)', border: '1px solid var(--glass-border)', borderRadius: 8, color: 'var(--on-surface)', outline: 'none' }}
+                    >
+                      <option value="CSE">CSE</option>
+                      <option value="IT">IT</option>
+                      <option value="ECE">ECE</option>
+                      <option value="ME">ME</option>
+                      <option value="CV">CV</option>
+                      <option value="MAC">MAC</option>
+                      <option value="AIDS">AIDS</option>
+                      <option value="AIML">AIML</option>
+                      <option value="IOT">IOT</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <label style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)' }}>Semester (1-8)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="8"
+                      value={editForm.semester}
+                      onChange={(e) => setEditForm({ ...editForm, semester: e.target.value })}
+                      style={{ width: '100%', padding: '8px 12px', background: 'rgba(13,19,35,0.4)', border: '1px solid var(--glass-border)', borderRadius: 8, color: 'var(--on-surface)', outline: 'none' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 120 }}>
+                    <label style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)' }}>Mobile No.</label>
+                    <input
+                      type="text"
+                      value={editForm.mobile}
+                      onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })}
+                      style={{ width: '100%', padding: '8px 12px', background: 'rgba(13,19,35,0.4)', border: '1px solid var(--glass-border)', borderRadius: 8, color: 'var(--on-surface)', outline: 'none' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <button className="btn btn--primary" onClick={handleSaveProfile} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button className="btn btn--outline" onClick={handleCancelEdit} disabled={saving}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 700, marginBottom: 4 }}>
+                    {p?.name}
+                  </h1>
+                  <button 
+                    onClick={handleEditClick}
+                    style={{ background: 'none', border: '1px solid var(--glass-border)', color: 'var(--on-surface-variant)', borderRadius: 8, padding: '4px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-label)' }}
+                  >
+                    Edit Profile
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--on-surface-variant)' }}>
+                    {p?.enrollmentId}
+                  </span>
+                  <span className="pill">{p?.branch}</span>
+                  <span className="pill">Year {p?.year}{p?.semester ? ` (Sem ${p.semester})` : ''}</span>
+                  {p?.mobile && <span className="pill">📞 {p.mobile}</span>}
+                  {p?.githubUsername && (
+                    <a
+                      href={`https://github.com/${p.githubUsername}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="pill pill--active"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      @{p.githubUsername} ↗
+                    </a>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div className="score-value score-value--sm">{formatNumber(ex.rank?.score)}</div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', marginTop: 6 }}>
-              <TierBadge tier={ex.rank?.tierRank} />
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--on-surface-variant)' }}>
-                Rank #{ex.rank?.leaderboardRank}
-              </span>
+          {!isEditing && (
+            <div style={{ textAlign: 'right' }}>
+              <div className="score-value score-value--sm">{formatNumber(ex.rank?.score)}</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', marginTop: 6 }}>
+                <TierBadge tier={ex.rank?.tierRank} />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--on-surface-variant)' }}>
+                  Rank #{ex.rank?.leaderboardRank}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
+      {ex?.available ? (
       <div className="dashboard-grid">
         {/* Score Formula Breakdown */}
         <div className="card fade-in stagger-1" style={{ gridColumn: 'span 2' }}>
@@ -321,21 +442,34 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+      ) : (
+        <div style={{ marginTop: 24 }}>
+          <div className="card" style={{ textAlign: 'center', padding: '32px 24px' }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>📊</div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>No Score Data Yet</div>
+            <div style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
+              Sync your GitHub profile to see your detailed score breakdown and explainability.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Transparency Note */}
-      <div style={{
-        marginTop: 32,
-        padding: '16px 20px',
-        borderRadius: 14,
-        background: 'rgba(13,19,35,0.3)',
-        border: '1px solid var(--glass-border)',
-        fontSize: 12,
-        color: 'var(--outline)',
-        textAlign: 'center',
-        fontFamily: 'var(--font-label)',
-      }}>
-        {ex.transparency?.source || 'Scores derived from GitHub metadata only. No source code is stored.'}
-      </div>
+      {ex?.available && (
+        <div style={{
+          marginTop: 32,
+          padding: '16px 20px',
+          borderRadius: 14,
+          background: 'rgba(13,19,35,0.3)',
+          border: '1px solid var(--glass-border)',
+          fontSize: 12,
+          color: 'var(--outline)',
+          textAlign: 'center',
+          fontFamily: 'var(--font-label)',
+        }}>
+          {ex.transparency?.source || 'Scores derived from GitHub metadata only. No source code is stored.'}
+        </div>
+      )}
     </div>
   );
 }

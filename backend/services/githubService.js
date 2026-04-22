@@ -74,7 +74,10 @@ const GITHUB_QUERY = `
 // -------------------------------------------------------------------
 async function fetchGithubGraphQL(username, userAccessToken = null) {
   const appToken = process.env.GITHUB_APP_TOKEN;
-  const token = (appToken && appToken !== 'local_placeholder') ? appToken : userAccessToken;
+  let token = userAccessToken;
+  if (!token && appToken && appToken !== 'local_placeholder') {
+    token = appToken;
+  }
   
   if (!token) throw new Error('No GitHub token available to fetch stats');
 

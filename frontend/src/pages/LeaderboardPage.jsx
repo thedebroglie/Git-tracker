@@ -71,45 +71,51 @@ export default function LeaderboardPage() {
       </div>
 
       {/* Filters */}
-      <div className="filter-bar">
-        <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)', marginRight: 4 }}>
-          BRANCH
-        </span>
-        {BRANCHES.map(b => (
-          <button
-            key={b}
-            className={`pill pill--clickable ${((!filters.branch && b === 'All') || filters.branch === b) ? 'pill--active' : ''}`}
-            onClick={() => setFilter('branch', b)}
-          >
-            {b}
-          </button>
-        ))}
+      <div className="filter-bar" style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <span style={{ fontSize: 13, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)', width: '70px', fontWeight: 600 }}>
+            • BRANCH
+          </span>
+          {BRANCHES.map(b => (
+            <button
+              key={b}
+              className={`pill pill--clickable ${((!filters.branch && b === 'All') || filters.branch === b) ? 'pill--active' : ''}`}
+              onClick={() => setFilter('branch', b)}
+            >
+              {b}
+            </button>
+          ))}
+        </div>
 
-        <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)', marginLeft: 12, marginRight: 4 }}>
-          YEAR
-        </span>
-        {YEARS.map(y => (
-          <button
-            key={y}
-            className={`pill pill--clickable ${((!filters.year && y === 'All') || filters.year === y) ? 'pill--active' : ''}`}
-            onClick={() => setFilter('year', y)}
-          >
-            {y === 'All' ? 'All' : `Y${y}`}
-          </button>
-        ))}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <span style={{ fontSize: 13, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)', width: '70px', fontWeight: 600 }}>
+            • YEAR
+          </span>
+          {YEARS.map(y => (
+            <button
+              key={y}
+              className={`pill pill--clickable ${((!filters.year && y === 'All') || filters.year === y) ? 'pill--active' : ''}`}
+              onClick={() => setFilter('year', y)}
+            >
+              {y === 'All' ? 'All' : `Y${y}`}
+            </button>
+          ))}
+        </div>
 
-        <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)', marginLeft: 12, marginRight: 4 }}>
-          TIER
-        </span>
-        {TIERS.map(t => (
-          <button
-            key={t}
-            className={`pill pill--clickable ${((!filters.tier && t === 'All') || filters.tier === t) ? 'pill--active' : ''}`}
-            onClick={() => setFilter('tier', t)}
-          >
-            {t}
-          </button>
-        ))}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <span style={{ fontSize: 13, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-label)', width: '70px', fontWeight: 600 }}>
+            • TIER
+          </span>
+          {TIERS.map(t => (
+            <button
+              key={t}
+              className={`pill pill--clickable ${((!filters.tier && t === 'All') || filters.tier === t) ? 'pill--active' : ''}`}
+              onClick={() => setFilter('tier', t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (

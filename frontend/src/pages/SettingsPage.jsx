@@ -66,9 +66,10 @@ export default function SettingsPage() {
               <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', fontFamily: 'var(--font-mono)' }}>
                 {user?.enrollmentId} · {user?.email}
               </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                 <span className="pill">{user?.branch}</span>
-                <span className="pill">Year {user?.year}</span>
+                <span className="pill">Year {user?.year}{user?.semester ? ` (Sem ${user.semester})` : ''}</span>
+                {user?.mobile && <span className="pill">📞 {user.mobile}</span>}
                 {user?.tierRank && <TierBadge tier={user.tierRank} />}
               </div>
             </div>

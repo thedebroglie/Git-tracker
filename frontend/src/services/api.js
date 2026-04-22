@@ -44,6 +44,7 @@ export const authAPI = {
 // ─── Student ───
 export const studentAPI = {
   getProfile: () => api.get('/api/student/profile'),
+  updateProfile: (data) => api.patch('/api/student/profile', data),
   getScoreExplanation: () => api.get('/api/student/score-explanation'),
   getSyncStatus: () => api.get('/api/student/sync-status'),
   disconnectGithub: () => api.post('/api/student/github/disconnect'),

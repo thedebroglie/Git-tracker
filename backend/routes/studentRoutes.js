@@ -27,6 +27,41 @@ router.get('/profile', authMiddleware, async (req, res) => {
   }
 });
 
+// ─── PATCH /api/student/profile — Update profile ───
+router.patch('/profile', authMiddleware, async (req, res) => {
+  try {
+    const { name, branch, semester, mobile, enrollmentId } = req.body;
+    const updates = {};
+    if (name) updates.name = name;
+    if (branch) updates.branch = branch;
+    if (semester) {
+      updates.semester = parseInt(semester, 10);
+      updates.year = Math.ceil(updates.semester / 2);
+    }
+    if (mobile !== undefined) updates.mobile = mobile;
+    
+    if (enrollmentId) {
+      // Check if it already exists in another student
+      const existing = await Student.findOne({ enrollmentId });
+      if (existing && existing._id.toString() !== req.user._id.toString()) {
+        return res.status(400).json({ error: 'Enrollment ID already in use' });
+      }
+      updates.enrollmentId = enrollmentId;
+    }
+
+    const student = await Student.findByIdAndUpdate(
+      req.user._id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
+    return res.json({ student });
+  } catch (error) {
+    console.error('Profile update error:', error.message);
+    return res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
 // ─── GET /api/student/sync-status — Cooldown info ───
 router.get('/sync-status', authMiddleware, async (req, res) => {
   try {

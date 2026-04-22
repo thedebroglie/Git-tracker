@@ -22,7 +22,15 @@ const studentSchema = new mongoose.Schema(
     branch: {
       type: String,
       required: true,
-      enum: ['CSE', 'IT', 'ECE', 'ME', 'CV'],
+      enum: ['CSE', 'IT', 'ECE', 'ME', 'CV', 'MAC', 'AIDS', 'AIML', 'IOT'],
+    },
+    semester: {
+      type: Number,
+      min: 1,
+      max: 8,
+    },
+    mobile: {
+      type: String,
     },
     year: {
       type: Number,
