@@ -1,7 +1,5 @@
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-
-dotenv.config({ path: fileURLToPath(new URL('./.env', import.meta.url)) });
+// MUST be first — loads .env before any other module evaluates process.env
+import './config/env.js';
 
 import express from 'express';
 import cors from 'cors';
@@ -193,10 +191,25 @@ const startServer = async () => {
       serverState.redisReady = redisReady;
       console.log(`Redis ping: ${pong}`);
     } catch (redisError) {
-      throw new Error(`Redis unavailable: ${redisError.message}`);
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`Redis unavailable: ${redisError.message}`);
+      }
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          type: 'redis_unavailable',
+          timestamp: new Date().toISOString(),
+          message: `Redis unavailable — running in degraded mode (queues/caching disabled): ${redisError.message}`,
+        })
+      );
     }
 
-    await enqueueNightlySync();
+    try {
+      await enqueueNightlySync();
+    } catch (queueError) {
+      if (process.env.NODE_ENV === 'production') throw queueError;
+      console.warn(`Nightly sync queue skipped (Redis unavailable): ${queueError.message}`);
+    }
 
     serverState.startupComplete = true;
 

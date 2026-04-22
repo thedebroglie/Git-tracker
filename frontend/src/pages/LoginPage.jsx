@@ -65,7 +65,11 @@ export default function LoginPage() {
         {/* Branding */}
         <div className="auth-branding fade-in">
           <div className="auth-branding__logo">
-            <div className="auth-branding__icon">G</div>
+            <img
+              src="/logo.png"
+              alt="GitTracker"
+              style={{ width: 80, height: 80, objectFit: 'contain', filter: 'drop-shadow(0 0 14px rgba(129,236,255,0.4))' }}
+            />
             <span className="auth-branding__name">GitTracker</span>
           </div>
           <p className="auth-branding__tagline">TRACK · SCORE · RISE</p>

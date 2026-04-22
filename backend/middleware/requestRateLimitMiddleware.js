@@ -41,10 +41,9 @@ function createRequestRateLimiter({
       await setWithTTL(key, String(count + 1), windowSeconds);
       return next();
     } catch (error) {
-      return res.status(500).json({
-        error: 'Rate limiter failure',
-        code: 'RATE_LIMITER_FAILURE',
-      });
+      // Store failure is non-fatal — degrade gracefully rather than blocking the request.
+      console.warn(`[RateLimit] Store error for ${keyPrefix}, skipping limit check: ${error.message}`);
+      return next();
     }
   };
 }

@@ -4,6 +4,7 @@ import { CosmicBackground } from './components/ui';
 import Sidebar from './components/Sidebar';
 import LoginPage from './pages/LoginPage';
 import GoogleOAuthCallbackPage from './pages/GoogleOAuthCallbackPage';
+import LandingPage from './pages/LandingPage';
 import DashboardPage from './pages/DashboardPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
@@ -73,6 +74,9 @@ export default function App() {
         <Routes>
           <Route path="/login/google/callback" element={<GoogleOAuthCallbackPage />} />
 
+          {/* Landing page — always public */}
+          <Route path="/" element={<LandingPage />} />
+
           {/* Public routes */}
           <Route element={<PublicRoute />}>
             <Route path="/login" element={<LoginPage />} />
@@ -87,7 +91,7 @@ export default function App() {
           </Route>
 
           {/* Fallback */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
