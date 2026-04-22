@@ -22,6 +22,11 @@ const syncQueue = isQueueDisabled
         removeOnFail: 200,
       },
     });
+if (!isQueueDisabled) {
+  syncQueue.on('error', (err) => {
+    console.error(`[Queue] Sync queue error: ${err.message}`);
+  });
+}
 
 /**
  * Add a single student sync job (triggered by manual refresh button).
